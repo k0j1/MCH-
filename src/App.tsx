@@ -11,7 +11,13 @@ import { theme } from './theme';
 import { MCHHero, Fortune, MCH_HEROES } from './data/mchData';
 import { OmikujiService } from './services/omikujiService';
 
-const discordSdk = new DiscordSDK(process.env.DISCORD_CLIENT_ID || "");
+const urlParams = new URLSearchParams(window.location.search);
+const frameId = urlParams.get('frame_id');
+
+let discordSdk: DiscordSDK | null = null;
+if (frameId) {
+  discordSdk = new DiscordSDK(process.env.DISCORD_CLIENT_ID || "");
+}
 
 const ParticleBackground = () => {
   const particles = Array.from({ length: 30 }).map((_, i) => ({
@@ -61,6 +67,10 @@ export default function App() {
 
   useEffect(() => {
     async function setupDiscordSdk() {
+      if (!discordSdk) {
+        console.warn("Discord SDK not initialized (no frame_id)");
+        return;
+      }
       try {
         await discordSdk.ready();
         console.log("Discord SDK is ready");
