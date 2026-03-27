@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, RefreshCw, Trophy, Shield, Sword, Star, BookOpen, X } from 'lucide-react';
+import { Sparkles, RefreshCw, Trophy, Shield, Sword, Star, BookOpen, X, Share2 } from 'lucide-react';
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import { theme } from './theme';
 import { MCHHero, Fortune, MCH_HEROES } from './data/mchData';
@@ -64,34 +64,60 @@ export default function App() {
   const [result, setResult] = useState<{ hero: MCHHero; fortune: Fortune } | null>(null);
   const [selectedHero, setSelectedHero] = useState<MCHHero | null>(null);
   const [version] = useState('v1.0.4');
+  const [userName, setUserName] = useState<string | null>(null);
+  const [appMode, setAppMode] = useState<'line' | 'discord' | 'web'>('web');
 
   useEffect(() => {
-    async function setupDiscordSdk() {
-      if (!discordSdk) {
-        console.warn("Discord SDK not initialized (no frame_id)");
+    async function initApp() {
+      // 1. Check Discord
+      if (frameId) {
+        setAppMode('discord');
+        if (!discordSdk) {
+          console.warn("Discord SDK not initialized (no frame_id)");
+          return;
+        }
+        try {
+          await discordSdk.ready();
+          console.log("Discord SDK is ready");
+          
+          // 認証フロー（ユーザーのアイコンや名前を取得する場合）
+          if (process.env.DISCORD_CLIENT_ID) {
+            const { code } = await discordSdk.commands.authorize({
+              client_id: process.env.DISCORD_CLIENT_ID,
+              response_type: "code",
+              state: "",
+              prompt: "none",
+              scope: ["identify", "guilds"],
+            });
+            console.log("Discord authorization code received");
+          }
+        } catch (error) {
+          console.error("Failed to initialize Discord SDK:", error);
+        }
         return;
       }
+
+      // 2. Check LIFF
       try {
-        await discordSdk.ready();
-        console.log("Discord SDK is ready");
-        
-        // 認証フロー（ユーザーのアイコンや名前を取得する場合）
-        if (process.env.DISCORD_CLIENT_ID) {
-          const { code } = await discordSdk.commands.authorize({
-            client_id: process.env.DISCORD_CLIENT_ID,
-            response_type: "code",
-            state: "",
-            prompt: "none",
-            scope: ["identify", "guilds"],
-          });
-          console.log("Discord authorization code received");
+        const liff = (await import('@line/liff')).default;
+        await liff.init({ liffId: "2009619405-HywNxJMr" });
+
+        if (liff.isInClient()) {
+          console.log("LINEから起動されました");
+          setAppMode('line');
+          const profile = await liff.getProfile();
+          setUserName(profile.displayName);
+        } else {
+          console.log("普通のブラウザで起動されました");
+          setAppMode('web');
         }
-      } catch (error) {
-        console.error("Failed to initialize Discord SDK:", error);
+      } catch (err) {
+        console.error("LIFF初期化失敗、またはブラウザ環境です:", err);
+        setAppMode('web');
       }
     }
     
-    setupDiscordSdk();
+    initApp();
   }, []);
 
   const handleDraw = () => {
@@ -151,7 +177,7 @@ export default function App() {
             <div className="glass-panel p-8 rounded-3xl mb-8 relative overflow-hidden group">
               <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
               <p className="mb-8 leading-relaxed text-lg font-medium relative z-10" style={{ color: theme.colors.text.primary }}>
-                今日の運勢とラッキーヒーローを占います。<br />
+                {userName ? `${userName}さんの本日の運勢は⁉️` : '今日の運勢とラッキーヒーローを占います。'}<br />
                 <span className="text-sm opacity-70 mt-2 block">あなたのブロックチェーン上の運命は？</span>
               </p>
               <motion.button
@@ -351,12 +377,42 @@ export default function App() {
                   whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.1)" }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleReset}
-                  className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors mb-4"
                   style={{ border: `2px solid ${theme.colors.border}`, color: theme.colors.text.primary }}
                 >
                   <RefreshCw size={18} />
                   もう一度占う
                 </motion.button>
+
+                {appMode === 'line' && (
+                  <motion.button
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.1 }}
+                    whileHover={{ scale: 1.05, backgroundColor: "#06C755" }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={async () => {
+                      try {
+                        const liff = (await import('@line/liff')).default;
+                        if (liff.isApiAvailable('shareTargetPicker')) {
+                          await liff.shareTargetPicker([
+                            {
+                              type: "text",
+                              text: `私の今日の運勢は「${result.fortune.name}」！ラッキーヒーローは「${result.hero.name}」でした！\n#MCHおみくじ`
+                            }
+                          ]);
+                        }
+                      } catch (e) {
+                        console.error("シェアに失敗しました", e);
+                      }
+                    }}
+                    className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                    style={{ backgroundColor: "#00B900", color: "#FFFFFF" }}
+                  >
+                    <Share2 size={18} />
+                    LINEでシェア
+                  </motion.button>
+                )}
               </div>
             </div>
             
