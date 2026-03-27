@@ -6,9 +6,12 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, RefreshCw, Trophy, Shield, Sword, Star, BookOpen, X } from 'lucide-react';
+import { DiscordSDK } from "@discord/embedded-app-sdk";
 import { theme } from './theme';
 import { MCHHero, Fortune, MCH_HEROES } from './data/mchData';
 import { OmikujiService } from './services/omikujiService';
+
+const discordSdk = new DiscordSDK(process.env.DISCORD_CLIENT_ID || "");
 
 const ParticleBackground = () => {
   const particles = Array.from({ length: 30 }).map((_, i) => ({
@@ -48,13 +51,38 @@ const getRarityStars = (rarity: string) => {
 
 /**
  * MCH Omikuji Application Component
- * Version 1.0.3
+ * Version 1.0.4
  */
 export default function App() {
   const [gameState, setGameState] = useState<'title' | 'drawing' | 'flash' | 'result' | 'collection'>('title');
   const [result, setResult] = useState<{ hero: MCHHero; fortune: Fortune } | null>(null);
   const [selectedHero, setSelectedHero] = useState<MCHHero | null>(null);
-  const [version] = useState('v1.0.3');
+  const [version] = useState('v1.0.4');
+
+  useEffect(() => {
+    async function setupDiscordSdk() {
+      try {
+        await discordSdk.ready();
+        console.log("Discord SDK is ready");
+        
+        // 認証フロー（ユーザーのアイコンや名前を取得する場合）
+        if (process.env.DISCORD_CLIENT_ID) {
+          const { code } = await discordSdk.commands.authorize({
+            client_id: process.env.DISCORD_CLIENT_ID,
+            response_type: "code",
+            state: "",
+            prompt: "none",
+            scope: ["identify", "guilds"],
+          });
+          console.log("Discord authorization code received");
+        }
+      } catch (error) {
+        console.error("Failed to initialize Discord SDK:", error);
+      }
+    }
+    
+    setupDiscordSdk();
+  }, []);
 
   const handleDraw = () => {
     setGameState('drawing');
